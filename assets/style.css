@@ -1,0 +1,29 @@
+body{
+  background-color:#002255;
+}
+
+.wrapper {
+  color: #002255;
+  background-color: #d5e5ff;
+}
+
+img{
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+  width: 50%;
+}
+
+H2 H3 H1{
+  color: #003380;
+}
+
+code {
+  background-color: #003380;
+  color: #d5e5ff;
+  padding: 2px;
+}
+
+codehilite{
+  padding: auto;
+}
