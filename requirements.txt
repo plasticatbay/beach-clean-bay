@@ -12,3 +12,4 @@ flask_caching==1.10.1
 google-cloud-profiler
 pandas
 sqlalchemy==1.4
+pymysql==1.0.2

@@ -44,6 +44,8 @@ import dash_bootstrap_components as dbc
 import zarr
 from flask_caching import Cache
 import sqlalchemy
+import os
+import pymysql
 
 
 # mysql> show tables;
@@ -143,7 +145,7 @@ def Mk_base_map():
 ####### layouts ###############
 
 def tab1_content(intro):
-    tab1_layout=dbc.Card([
+    return dbc.Card([
         dbc.CardHeader('Map of amount of plastic pollution collected'),
         dbc.CardBody([
             dbc.Row([
@@ -172,7 +174,7 @@ def tab2_content():
             dbc.Row([
                 dcc.Dropdown(
                     id='beach-choice',
-                    #options=[mk_beach_dropdown()],
+                    # options=[mk_beach_dropdown()],
                     value='Balnakeil'
                 ),
                 dcc.Graph(
@@ -221,6 +223,7 @@ app = dash.Dash(__name__,
                 external_stylesheets=[dbc.themes.BOOTSTRAP],
                 meta_tags=[{"name": "viewport", "content": "width=device-width, initial-scale=1"}])
 server=app.server
+app.supress_callback_exceptions=True
 cache = Cache(app.server, config={
     'CACHE_TYPE': 'filesystem',
     'CACHE_DIR': '/tmp'
@@ -258,6 +261,36 @@ def warmup():
     # Handle your warmup logic here, e.g. set up a database connection pool
 
 
+@cache.memoize(timeout=timeout)
+def caching():
+    return global_store()
+
+
+# @app.callback(
+#     Output('weight-map','figure'),
+#     Input('none', 'children') # should the input of these be the value of the cache? is that possible?
+# )
+def Mk_main_map():
+    # in the future distinguish by teams?
+    _, grouped=caching()
+    return Mk_map_weight(grouped)
+
+# @app.callback(
+#     Output('beach-choice','options'),
+#     Input('none', 'children') # should the input of these be the value of the cache? is that possible?
+# )
+def mk_beach_dropdown():
+    '''
+    Get the name of all the beaches and collect them in a dictionary
+    '''
+    _, grouped = global_store()
+    all_beaches=[grouped['Beach']] #<= some query
+    return [{'label':all_beaches[i],'value': all_beaches[i]} for i in range(len(all_beaches))]
+
+
+# not sure about this part. how else does the app get access to the the engine that's created in the warmup?
+# engine = warmup()
+
 app.title="Beach Clean Bay"
 app.layout = dbc.Container([
     #header
@@ -277,43 +310,20 @@ app.layout = dbc.Container([
     ])
 ])
 
-@cache.memoize(timeout=timeout)
-def caching():
-    return global_store()
-
-@app.callback(
-    Output('weight-map','figure'),
-    Input('none', 'children')
-)
-def Mk_main_map():
-    # in the future distinguish by teams?
-    _, grouped=caching()
-    return Mk_map_weight(grouped)
-
-@app.callback(
-    Output('beach-choice','options'),
-    Input('none', 'children')
-)
-def mk_beach_dropdown():
-    '''
-    Get the name of all the beaches and collect them in a dictionary
-    '''
-    _, grouped=global_store()
-    all_beaches=[groubed['Beach']] #<= some query
-    return [{'label':All_names[i],'value': All_names[i]} for i in range(len(All_names))]
 
 @app.callback(
     Output('beach-statistic', 'figure'),
-    Input('beach-output', 'value'),
+    Input('beach-choice', 'value'),
     #State()
 )
 def update_cum_curve(beach):
     '''
     Make a curve of the cumulative weight collected on a beach
     '''
-    df, _=global_store()
+    df, _ = global_store()
     df_beach= df[(df==beach).any(axis=1)].sort_values(by=['Dates'])
-    fig= go.Figure()
+    
+    fig = go.Figure()
     if len(df_beach)>1:
         df_beach['Dates']=pd.to_datetime(df_beach['Dates'])
         df_beach['Cum_weight']=df_beach['Weight'].cumsum()
@@ -327,9 +337,9 @@ def update_cum_curve(beach):
                 name='Kg',
                 mode='lines'))
 
-        rates=  pd.Series(df_beach['Weight'].values, index=df_beach['Dates'])
-        New_Dates=df_beach['Dates'][:-1]+df_beach['Dates'].diff()[1:].values/2
-        daily_rate=rates.values[1:]/(df_beach['Dates'].diff()[1:].values.astype('float')/(1e9*3600*24))
+        rates = pd.Series(df_beach['Weight'].values, index=df_beach['Dates'])
+        New_Dates = df_beach['Dates'][:-1]+df_beach['Dates'].diff()[1:].values/2
+        daily_rate = rates.values[1:]/(df_beach['Dates'].diff()[1:].values.astype('float')/(1e9*3600*24))
         fig.add_trace(go.Scatter(x= New_Dates,
                              y=daily_rate,
                              line=dict(color='firebrick'),
