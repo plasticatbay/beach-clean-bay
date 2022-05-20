@@ -144,7 +144,7 @@ def Mk_base_map():
 ####### layouts ###############
 
 def tab1_content(intro):
-    return dbc.Card([
+    tab1_layout=dbc.Card([
         dbc.CardHeader('Map of amount of plastic pollution collected'),
         dbc.CardBody([
             dbc.Row([
@@ -255,7 +255,7 @@ def warmup():
     # See https://docs.sqlalchemy.org/en/latest/core/pooling.html for more
     # information
     engine = sqlalchemy.create_engine(engine_url, pool_size=3)
-    return engine
+    return '', 200
     # Handle your warmup logic here, e.g. set up a database connection pool
 
 
