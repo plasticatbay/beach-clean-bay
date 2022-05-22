@@ -3,10 +3,10 @@ runtime: python38
 
 env_variables:
   TMPDIR: "/tmp"
-  CLOUD_SQL_USERNAME: ***
-  CLOUD_SQL_PASSWORD: ***
-  CLOUD_SQL_DATABASE_NAME: ocean-plastics
-  CLOUD_SQL_CONNECTION_NAME: light-team-340714:europe-west2:beachclean-bay-db
+  CLOUD_SQL_USERNAME: 'beachclean-bay-db'
+  CLOUD_SQL_PASSWORD: 'MOhvdpf5PAnfrjbg'
+  CLOUD_SQL_DATABASE_NAME: 'ocean-plastics'
+  CLOUD_SQL_CONNECTION_NAME: 'light-team-340714:europe-west2:beachclean-bay-db'
 
 #automatic_scaling:
 
@@ -18,7 +18,5 @@ inbound_services:
 handlers:
 - url: /_ah/warmup
   script: main.py
-
-instance_class: F1
 
 entrypoint: gunicorn -b :$PORT main:server
