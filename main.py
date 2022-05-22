@@ -25,6 +25,7 @@
 #     print(exc)  # Handle errors here
 
 import gcsfs
+import os
 from  xarray import open_zarr
 from google.cloud import storage
 import numpy as np
