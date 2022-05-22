@@ -143,7 +143,7 @@ def Mk_base_map():
 ####### layouts ###############
 
 def tab1_content(intro):
-    tab1_layout=dbc.Card([
+    return dbc.Card([
         dbc.CardHeader('Map of amount of plastic pollution collected'),
         dbc.CardBody([
             dbc.Row([
