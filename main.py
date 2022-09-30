@@ -24,11 +24,7 @@
 # except (ValueError, NotImplementedError) as exc:
 #     print(exc)  # Handle errors here
 
-import gcsfs
 import os
-from  xarray import open_zarr
-from google.cloud import storage
-import numpy as np
 import pandas as pd
 # import datashader as DS
 import plotly.graph_objects as go
@@ -42,7 +38,6 @@ from dash import dcc as dcc
 from dash import html as html
 from dash.dependencies import Input, Output, State
 import dash_bootstrap_components as dbc
-import zarr
 from flask_caching import Cache
 import sqlalchemy
 
