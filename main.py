@@ -39,7 +39,8 @@ from dash import html as html
 from dash.dependencies import Input, Output, State
 import dash_bootstrap_components as dbc
 from flask_caching import Cache
-import sqlalchemy
+
+from db import init_db
 
 
 # mysql> show tables;
@@ -84,6 +85,33 @@ import sqlalchemy
 # |  3 | Keoldale                    | 58.5515 | -4.77859 | Scotland |            |
 # |  4 | Kyle of Durness (Old Grudy) | 58.5267 | -4.81157 | Scotland |            |
 
+
+app = dash.Dash(__name__,
+                external_stylesheets=[dbc.themes.BOOTSTRAP],
+                meta_tags=[{"name": "viewport", "content": "width=device-width, initial-scale=1"}])
+server=app.server
+cache = Cache(app.server, config={
+    'CACHE_TYPE': 'filesystem',
+    'CACHE_DIR': '/tmp'
+})
+timeout = 300
+
+def global_store():
+    print('Using global store')
+    engine = init_db()
+    with engine.connect() as cnx:
+        df= pd.read_sql_table('WeightData', cnx)
+        #cursor = cnx.execute('SELECT * FROM `WeightData`')
+        #df =cursor.fetchall()
+    df['Weight']=df['Weight'].astype('float')
+    grouped = df.groupby(['Beach', 'Lat', 'Longit'])[['Weight']].agg('sum').reset_index()
+    return df, grouped
+
+@cache.memoize(timeout=timeout)
+def caching():
+    return global_store()
+
+
 def Mk_map_weight(grouped):
     '''
     Make a map of plastic accumulations
@@ -116,7 +144,7 @@ def Mk_map_weight(grouped):
 
 
 def Mk_base_map():
-    _, grouped=global_store()
+    _, grouped=caching()
     fig=go.Scattermapbox(lon=grouped['Longit'],
                      lat=grouped['Lat'],
                      text=grouped['Beach'],
@@ -135,6 +163,14 @@ def Mk_base_map():
                     zoom=4,
                     style="open-street-map",))
     return fig
+
+def mk_beach_dropdown():
+    '''
+    Get the name of all the beaches and collect them in a dictionary
+    '''
+    _, grouped=caching()
+    all_beaches=grouped['Beach'].array
+    return [{'label': i,'value': i} for i in all_beaches]
 
 ####### layouts ###############
 
@@ -168,7 +204,7 @@ def tab2_content():
             dbc.Row([
                 dcc.Dropdown(
                     id='beach-choice',
-                    #options=[mk_beach_dropdown()],
+                    options=mk_beach_dropdown(),
                     value='Balnakeil'
                 ),
                 dcc.Graph(
@@ -182,17 +218,6 @@ def tab3_content():
     return dbc.Card([
     dbc.CardHeader('Submission form')])
 
-###### SQL ####
-
-def global_store():
-    print('Using global store')
-    with engine.connect() as cnx:
-        df= pd.read_sql_table('WeightData', cnx)
-        #cursor = cnx.execute('SELECT * FROM `WeightData`')
-        #df =cursor.fetchall()
-    df['Weight']=df['Weight'].astype('float')
-    grouped = df.groupby(['Beach', 'Lat', 'Longit'])[['Weight']].agg('sum').reset_index()
-    return df, grouped
 
 
 intro= '''
@@ -213,45 +238,6 @@ finding solutions to marine pollution. All our data are open access and could be
 requested at any time.
 '''
 
-app = dash.Dash(__name__,
-                external_stylesheets=[dbc.themes.BOOTSTRAP],
-                meta_tags=[{"name": "viewport", "content": "width=device-width, initial-scale=1"}])
-server=app.server
-cache = Cache(app.server, config={
-    'CACHE_TYPE': 'filesystem',
-    'CACHE_DIR': '/tmp'
-})
-timeout = 300
-
-@server.route('/_ah/warmup')
-def warmup():
-    """Warm up an instance of the app."""
-    db_user = os.environ.get('CLOUD_SQL_USERNAME')
-    db_password = os.environ.get('CLOUD_SQL_PASSWORD')
-    db_name = os.environ.get('CLOUD_SQL_DATABASE_NAME')
-    db_connection_name = os.environ.get('CLOUD_SQL_CONNECTION_NAME')
-    # When deployed to App Engine, the `GAE_ENV` environment variable will be
-    # set to `standard`
-    if os.environ.get('GAE_ENV') == 'standard':
-        # If deployed, use the local socket interface for accessing Cloud SQL
-        unix_socket = '/cloudsql/{}'.format(db_connection_name)
-        engine_url = 'mysql+pymysql://{}:{}@/{}?unix_socket={}'.format(
-            db_user, db_password, db_name, unix_socket)
-    else:
-        # If running locally, use the TCP connections instead
-        # Set up Cloud SQL Proxy (cloud.google.com/sql/docs/mysql/sql-proxy)
-        # so that your application can use 127.0.0.1:3306 to connect to your
-        # Cloud SQL instance
-        host = '127.0.0.1'
-        engine_url = 'mysql+pymysql://{}:{}@{}/{}'.format(
-            db_user, db_password, host, db_name)
-
-    # The Engine object returned by create_engine() has a QueuePool integrated
-    # See https://docs.sqlalchemy.org/en/latest/core/pooling.html for more
-    # information
-    engine = sqlalchemy.create_engine(engine_url, pool_size=3)
-    return '', 200
-    # Handle your warmup logic here, e.g. set up a database connection pool
 
 
 app.title="Beach Clean Bay"
@@ -273,10 +259,6 @@ app.layout = dbc.Container([
     ])
 ])
 
-@cache.memoize(timeout=timeout)
-def caching():
-    return global_store()
-
 @app.callback(
     Output('weight-map','figure'),
     Input('none', 'children')
@@ -286,28 +268,17 @@ def Mk_main_map():
     _, grouped=caching()
     return Mk_map_weight(grouped)
 
-@app.callback(
-    Output('beach-choice','options'),
-    Input('none', 'children')
-)
-def mk_beach_dropdown():
-    '''
-    Get the name of all the beaches and collect them in a dictionary
-    '''
-    _, grouped=global_store()
-    all_beaches=[groubed['Beach']] #<= some query
-    return [{'label':All_names[i],'value': All_names[i]} for i in range(len(All_names))]
 
 @app.callback(
     Output('beach-statistic', 'figure'),
-    Input('beach-output', 'value'),
+    Input('beach-choice', 'value'),
     #State()
 )
 def update_cum_curve(beach):
     '''
     Make a curve of the cumulative weight collected on a beach
     '''
-    df, _=global_store()
+    df, _=caching()
     df_beach= df[(df==beach).any(axis=1)].sort_values(by=['Dates'])
     fig= go.Figure()
     if len(df_beach)>1:
@@ -355,13 +326,15 @@ def update_cum_curve(beach):
     else:
         fig.update_layout(
             {
+                "title": {
                     "text": "Only one measure, cannot draw a figure",
-                    "xref": "paper",
-                    "yref": "paper",
-                    "showarrow": False,
-                    "font": {
-                        "size": 28
-                    }}
+                },
+                # "xref": "paper",
+                # "yref": "paper",
+                # "showarrow": False,
+                "font": {
+                    "size": 28
+                }}
         )
 
     return fig
