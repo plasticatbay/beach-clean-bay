@@ -12,18 +12,6 @@
 #
 # Copyright 2022, Julien Moreau, Plastic@Bay CIC
 
-# import googlecloudprofiler
-#
-# # Profiler initialization. It starts a daemon thread which continuously
-# # collects and uploads profiles. Best done as early as possible.
-# try:
-#     # service and service_version can be automatically inferred when
-#     # running on App Engine. project_id must be set if not running
-#     # on GCP.
-#     googlecloudprofiler.start(verbose=3)
-# except (ValueError, NotImplementedError) as exc:
-#     print(exc)  # Handle errors here
-
 import os
 import pandas as pd
 # import datashader as DS
@@ -87,7 +75,7 @@ from db import init_db
 
 
 app = dash.Dash(__name__,
-                external_stylesheets=[dbc.themes.BOOTSTRAP],
+                external_stylesheets=[dbc.themes.BOOTSTRAP, 'assets/style.css'],
                 meta_tags=[{"name": "viewport", "content": "width=device-width, initial-scale=1"}])
 server=app.server
 cache = Cache(app.server, config={
@@ -101,8 +89,7 @@ def global_store():
     engine = init_db()
     with engine.connect() as cnx:
         df= pd.read_sql_table('WeightData', cnx)
-        #cursor = cnx.execute('SELECT * FROM `WeightData`')
-        #df =cursor.fetchall()
+
     df['Weight']=df['Weight'].astype('float')
     grouped = df.groupby(['Beach', 'Lat', 'Longit'])[['Weight']].agg('sum').reset_index()
     return df, grouped
@@ -112,11 +99,13 @@ def caching():
     return global_store()
 
 
-def Mk_map_weight(grouped):
+def Mk_map_weight():
     '''
     Make a map of plastic accumulations
     '''
-    plastic_map=go.Figure(go.Scattermapbox(lon=grouped['Longit'],
+    _,grouped=caching() 
+    plastic_map=go.Figure(go.Scattermapbox(
+                     lon=grouped['Longit'],
                      lat=grouped['Lat'],
                      text=grouped['Beach'],
                      hovertemplate=
@@ -129,7 +118,7 @@ def Mk_map_weight(grouped):
                             sizeref=10)))
 
     plastic_map.update_layout(
-        height=700,
+        #height=700,
         hovermode='closest',
         mapbox=dict(
                     bearing=0,
@@ -150,8 +139,8 @@ def Mk_base_map():
                      text=grouped['Beach'],
                      mode='markers')
     fig.update_layout(
-        height=400,
-        width=400,
+        height=600,
+        #width=400,
         hovermode='closest',
         mapbox=dict(
                     bearing=0,
@@ -178,24 +167,27 @@ def tab1_content(intro):
     tab1_layout=dbc.Card([
         dbc.CardHeader('Map of amount of plastic pollution collected'),
         dbc.CardBody([
-            dbc.Row([
-                html.Button(
-                    'Submit new data',
-                    id='submit-button',
-                    n_clicks=0,
-                ),
-                html.Div(id='none',children=[],style={'display': 'none'})
-            ]),
+            
+            #    Html.Div(id='none',children=[],style={'display': 'none'})
+            
             dbc.Row([
                 html.P(intro),
                 dcc.Graph(
                     id='weight-map',
-                    figure=go.Figure(),
+                    figure=Mk_map_weight()
                 )
-            ])
+            ]),
+            dbc.Row([
+                dbc.Button(
+                    'Submit new data',
+                    id='submit-button',
+                    n_clicks=0,
+                ),
+            ]),
         ])
 
     ])
+    return tab1_layout
 
 def tab2_content():
     return dbc.Card([
@@ -216,7 +208,13 @@ def tab2_content():
 
 def tab3_content():
     return dbc.Card([
-    dbc.CardHeader('Submission form')])
+        dbc.CardHeader('Submission form'),
+        dbc.CardBody([
+            dbc.Row([
+                html.P(intro_submit),
+            ]),
+        ])
+    ])
 
 
 
@@ -243,30 +241,39 @@ requested at any time.
 app.title="Beach Clean Bay"
 app.layout = dbc.Container([
     #header
-    html.Div([
-        html.H1('Plastic@Bay CIC citizen science portal'),
-        html.P(intro),
+    dbc.Card([
+        dbc.CardHeader(['Plastic@Bay CIC citizen science portal'], className='main-title'),
+        #html.P(intro),
         ]),
     # Define tabs
-    html.Div([
-        dbc.Tabs([
-            dbc.Tab(tab1_content(intro),label='Plastic map',tab_id='tab-main',),
-            dbc.Tab(tab2_content(),label='Beach stats',tab_id='tab-curves',),
-            dbc.Tab(tab3_content(),label='Submit data',tab_id='tab-submit',)
-            ],
-            id="main-tabs",
-            active_tab="tab-main",)
-    ])
+        dbc.CardBody([
+            dbc.Tabs([
+                dbc.Tab(tab1_content(intro),label='Plastic map',tab_id='tab-main',),
+                dbc.Tab(tab2_content(),label='Beach stats',tab_id='tab-curves',),
+                dbc.Tab(tab3_content(),label='Submit data',tab_id='tab-submit',)
+                ],
+                id="main-tabs",
+                active_tab="tab-main",)
+            ]),
+        dbc.CardFooter([
+            dbc.Row([
+                dbc.Col([
+                html.P('Copyright Plastic@Bay CIC 2022'),
+                    ], width=6),
+                dbc.Col([html.Img(src='assets/logo3.png'),
+                         ], width=2)
+                ],justify='end', align='center')
+        ], className='main-footer')
 ])
 
-@app.callback(
-    Output('weight-map','figure'),
-    Input('none', 'children')
-)
-def Mk_main_map():
+#@app.callback(
+#    Output('weight-map','figure'),
+#    Input('none', 'children')
+#)
+#def Mk_main_map():
     # in the future distinguish by teams?
-    _, grouped=caching()
-    return Mk_map_weight(grouped)
+#    _, grouped=caching()
+#    return Mk_map_weight(grouped)
 
 
 @app.callback(
@@ -277,11 +284,13 @@ def Mk_main_map():
 def update_cum_curve(beach):
     '''
     Make a curve of the cumulative weight collected on a beach
+    Calculate the rate of pollution
     '''
     df, _=caching()
     df_beach= df[(df==beach).any(axis=1)].sort_values(by=['Dates'])
     fig= go.Figure()
     if len(df_beach)>1:
+        ## need to account for several weights on the same day or rates will have divisions by 0
         df_beach['Dates']=pd.to_datetime(df_beach['Dates'])
         df_beach['Cum_weight']=df_beach['Weight'].cumsum()
         fig.add_trace(go.Scatter(
@@ -327,7 +336,7 @@ def update_cum_curve(beach):
         fig.update_layout(
             {
                 "title": {
-                    "text": "Only one measure, cannot draw a figure",
+                    "text": "Only one measure, cannot draw the figure",
                 },
                 # "xref": "paper",
                 # "yref": "paper",
@@ -344,8 +353,9 @@ def update_cum_curve(beach):
     Output('main-tabs','active_tab'),
     Input('submit-button', 'n_clicks'),
 )
-def Switch_tab(active_tab):
-    return 'tab-submit'
+def Switch_tab(click):
+    if click:
+        return 'tab-submit'
 
 # @app.callback(
 #     Output('click-data', 'children'),

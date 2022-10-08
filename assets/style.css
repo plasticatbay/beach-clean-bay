@@ -9,13 +9,13 @@ body{
 
 img{
   display: block;
-  margin-left: auto;
+  margin-left: auto ;
   margin-right: auto;
-  width: 50%;
+  width: 3vw;
 }
 
-H2 H3 H1{
-  color: #003380;
+h2, h3, h1{
+  color: #d5e5ff;
 }
 
 code {
@@ -26,4 +26,20 @@ code {
 
 codehilite{
   padding: auto;
+}
+
+nav-tabs{
+  color: #80b3ff;
+}
+
+.main-title{
+  font-size: 3vw;
+  color: #d5e5ff;
+  background-color: #003380;
+}
+
+.main-footer{
+  text-align: right;
+  font-size:1vw;
+  color:#d5e5ff;
 }
