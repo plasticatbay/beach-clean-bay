@@ -29,13 +29,14 @@ codehilite{
 }
 
 nav-tabs{
-  color: #80b3ff;
+  color: #003380;
 }
 
 .main-title{
   font-size: 3vw;
   color: #d5e5ff;
   background-color: #003380;
+  border-color: #80b3ff;
 }
 
 .main-footer{
@@ -43,3 +44,23 @@ nav-tabs{
   font-size:1vw;
   color:#d5e5ff;
 }
+
+.card-body{
+  color:#80b3ff;
+  background-color:#002255;
+  
+}
+.card{
+  border-color: #d5e5ff;
+  border-width:2px;
+}
+
+.card-header{
+  background-color: #003380;
+  }
+  
+.nav-link{
+  color:#80b3ff;
+}
+
+
