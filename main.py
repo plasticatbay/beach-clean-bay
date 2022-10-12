@@ -25,6 +25,7 @@ import dash
 from dash import dcc as dcc
 from dash import html as html
 from dash import dash_table as d_t
+from dash import ctx as ctx
 import dash_daq as daq
 from dash.dependencies import Input, Output, State
 import dash_bootstrap_components as dbc
@@ -76,6 +77,7 @@ from db import init_db
 # |  4 | Kyle of Durness (Old Grudy) | 58.5267 | -4.81157 | Scotland |            |
 
 app = dash.Dash(__name__,
+                prevent_initial_callbacks=True,
                 external_stylesheets=[dbc.themes.BOOTSTRAP, 'assets/style.css'],
                 meta_tags=[{"name": "viewport", "content": "width=device-width, initial-scale=1"}])
 server=app.server
@@ -95,8 +97,11 @@ def global_store():
         beaches=pd.read_sql_table('Beach2coord', cnx)
 
     df['Weight']=df['Weight'].astype('float')
+    total_weight=df['Weight'].sum()
     grouped = df.groupby(['Beach', 'Lat', 'Longit'])[['Weight']].agg('sum').reset_index()
-    return df, grouped, beaches
+    total_beach=len(grouped)
+    total_cleanups=len(df)
+    return df, grouped, beaches, total_weight, total_beach, total_cleanups
 
 @cache.memoize(timeout=timeout)
 def caching():
@@ -108,7 +113,7 @@ def Mk_map_weight():
     '''
     Make a map of plastic accumulations
     '''
-    _,grouped,_=caching() 
+    _,grouped,_,_,_,_=caching() 
     plastic_map=go.Figure(go.Scattermapbox(
                      lon=grouped['Longit'],
                      lat=grouped['Lat'],
@@ -137,19 +142,67 @@ def Mk_map_weight():
                     style="stamen-toner",))
     return plastic_map
 
+def draw_stat_curve(df_beach, fig, beach):
+        df_beach['Dates']=pd.to_datetime(df_beach['Dates'])
+        df_beach['Cum_weight']=df_beach['Weight'].cumsum()
+        fig.add_trace(go.Scatter(
+            x=df_beach['Dates'],
+            y=df_beach['Cum_weight'],
+            line=dict(shape='hv', color='navy'),
+            hovertemplate=
+                "<b>%{x}</b><br>" +
+                "Cumulative Weight: %{y:.2f}<br>",
+            name='Kg',
+            mode='lines'))
+        rates=  pd.Series(df_beach['Weight'].values, index=df_beach['Dates'])
+        New_Dates=df_beach['Dates'][:-1]+df_beach['Dates'].diff()[1:].values/2
+        daily_rate=rates.values[1:]/(df_beach['Dates'].diff()[1:].values.astype('float')/(1e9*3600*24))
+        fig.add_trace(go.Scatter(x= New_Dates,
+                         y=daily_rate,
+                         line=dict(color='firebrick'),
+                         yaxis='y2',
+                         name= 'kg/d',
+                         hovertemplate=
+                        "<b>%{x}</b><br>" +
+                        "Pollution rate: %{y:.2f}<br>",
+                        ),
+             )
+        fig.update_yaxes(showgrid=False)
+        fig.update_layout(
+            title=beach,
+            showlegend=False,
+            yaxis1=dict(title='Cumulative weight (kg)',
+                titlefont=dict(color=fig.data[0].line.color),
+                tickfont=dict(color=fig.data[0].line.color)),
+
+            yaxis2=dict(title='pollution rate(kg/d)',
+                anchor="x",
+                overlaying="y",
+                side="right",
+                titlefont=dict(color=fig.data[1].line.color),
+                tickfont=dict(color=fig.data[1].line.color),
+                )
+        )
+        return fig
 
 def Mk_base_map():
-    _, grouped,_=caching()
+    _, grouped,_,_,_,_=caching()
     base_map=go.Figure()
-    base_map.add_trace(go.Scattermapbox(lon=grouped['Longit'],
-                     lat=grouped['Lat'],
-                     text=grouped['Beach'],
-                     mode='markers')
+    base_map.add_trace(
+        go.Scattermapbox(
+            lon=grouped['Longit'],
+            lat=grouped['Lat'],
+            text=grouped['Beach'],
+            hovertemplate=
+                    "<b>%{text}</b><br>" +
+                    "lat: %{lat:.5f}<br>" +
+                    "lon: %{lon:.5f}<br><extra></extra>",
+            mode='markers')
                        )
 
     base_map.update_layout(
         height=300,
-        width=300,
+        #width=300,
         hovermode='closest',
         showlegend=False,
         margin=dict(b=1, l=1, r=1, t=1),
@@ -199,25 +252,34 @@ def mk_beach_dropdown():
     '''
     Get the name of all the beaches and collect them in a dictionary
     '''
-    _, grouped,_=caching()
+    _, grouped,_,_,_,_=caching()
     all_beaches=grouped['Beach'].array
     return [{'label': i,'value': i} for i in all_beaches]
 
 def get_beach_data(beach):
-    df,_,_=caching()
+    df,_,_,_,_,_=caching()
     df_beach= df[(df==beach).any(axis=1)].sort_values(by=['Dates']) \
                 .groupby(['Dates','Lat', 'Longit'])[['Weight']].agg('sum').reset_index()
     last_entry_dates=pd.to_datetime(df_beach['Dates'])[-50:]
     last_entry_weight=df_beach['Weight'][-50:]
     lon,lat=df_beach['Longit'][0],df_beach['Lat'][0]
     summary=go.Figure(go.Scatter(x=last_entry_dates, y=last_entry_weight))
-    return last_entry_dates, summary, lon,lat
+    summary.update_layout(
+        height=200,
+        title=f'Last 50 records for {beach}',
+        margin=dict(b=1, l=1, r=5, t=30),
+        yaxis=dict(title='Weight collected (kg)')
+    )
+    last_record= 'Last record in {}:   {} --- {} kg.'.format(
+        beach,last_entry_dates.iloc[-1].date(),last_entry_weight.iloc[-1] )
+    return last_record, summary, lon,lat
     
 
 
 ####### LAYOUTS ###############
 
 def tab1_content(intro):
+    _,_,_,total_weight, total_beach, total_cleanups=caching()
     tab1_layout=dbc.Card([        
         dbc.CardBody([
             dbc.Row([
@@ -236,18 +298,30 @@ def tab1_content(intro):
                     dbc.CardHeader('Portal statistics'),
                     dbc.CardBody([
                         dbc.Row([
-                            daq.LEDDisplay(
-                                id='Total_Portal',
-                                label='Total weight of plastic\npollution collected (kg)',
-                                value=999,
-                                color='#002255'                                
-                            ),
-                            daq.LEDDisplay(
-                                id='Total_records',
-                                label='Total number of cleanups',
-                                value=666 ,
-                                color='#002255'
-                            )
+                            dbc.Col([
+                                daq.LEDDisplay(
+                                    id='Total_Portal',
+                                    label='Total weight of plastic\npollution collected (kg)',
+                                    value=round(total_weight),
+                                    color='#002255'                                
+                                ),
+                            ]),
+                            dbc.Col([
+                                daq.LEDDisplay(
+                                    id='Total_records',
+                                    label='Total number of cleanups',
+                                    value=total_cleanups ,
+                                    color='#002255'
+                                )
+                            ]),
+                            dbc.Col([
+                                daq.LEDDisplay(
+                                    id='Total_sites',
+                                    label='Total number of cleaned sites',
+                                    value=total_beach ,
+                                    color='#002255'
+                                )
+                            ]),
                         ])
                     ])
                 ])
@@ -287,56 +361,119 @@ def tab3_content():
                     dbc.CardBody([
                          dbc.Row([
                              dbc.Col([
-                                 dcc.Dropdown(
-                                     id='beach-choice-map',
-                                     options=mk_beach_dropdown(),
-                                     value='Balnakeil'
-                                     ),
-                                 dcc.Graph(
-                                     id='beach_picker',
-                                     figure=Mk_base_map()
-                                     ),
-                                 ]),
+                                 dbc.Card([
+                                     dbc.CardHeader('Previous records'),
+                                     dbc.CardBody([
+                                         dcc.Dropdown(
+                                             id='beach-choice-map',
+                                             options=mk_beach_dropdown(),
+                                             value='Balnakeil'
+                                             ),
+                                         dcc.Graph(
+                                             id='beach_picker',
+                                             figure=Mk_base_map()
+                                             ),
+                                         html.P(id='latest-record'),
+                                         dcc.Graph(
+                                             id='recent_records',
+                                             figure=go.Figure(data={}, layout=dict(
+                                                 title='no beach selected',
+                                                 height=200,
+                                                 margin=dict(b=1, l=1, r=1, t=30),)
+                                                              )
+                                             ),
+                                         ])
+                                     ])
+                             ], width=6),
                              dbc.Col([
-                                 html.P('Showing last 50 entries. You cannot select the same date as a previous record for now.'),
-                                 html.P(id='latest-record'),
-                                 dcc.Graph(
-                                     id='recent_records',
-                                     ),
-                                 dcc.DatePickerSingle(
-                                     id='date_picker',
-                                     placeholder='Select a collection date',
-                                     date=datetime.now().date()
-                                     ),
+                                 dbc.Card([
+                                     dbc.CardHeader('Register your cleanup'),
+                                     dbc.CardBody([
+                                         dbc.Row([
+                                             html.H3('Please select a beach on the map or on the dropdown menu'),
+                                             html.P(id='selected_beach'),
+                                             ]),
+                                         dbc.Row([
+                                             html.H3('Choose a collection date'),
+                                             dcc.DatePickerSingle(
+                                                 id='date_picker',
+                                                 date=datetime.now().date()
+                                             ),
+                                             ]),
+                                         dbc.Row([
+                                             html.H3('Your registered user name'),
+                                             # this should fill up from Google
+                                             html.P(
+                                                 id='username',
+                                                   ),
+                                             # this should fill up from the DB
+                                             html.P(id='Registered team'),
+                                             ]),
+                                         dbc.Row([
+                                             html.H3('Weight collected during the cleanup'),
+                                             dcc.Input(id='collected_weight',
+                                                   placeholder='Weight in KG'),
+                                             ]),
+                                         dbc.Row([
+                                             html.Hr(),
+                                             dbc.Button(
+                                                 'Submit new data',
+                                                 id='submit-button',
+                                                 n_clicks=0,
+                                                 disabled=True,
+                                                 size='lg',
+                                                 style={'background-color':'#003380',
+                                                        'color':'#d5e5ff'}
+                                             ),
+                                         ]),
+                                         ])
+                                 ])
                                  ])
                          ]),
                     ]),
                 ]),
             dbc.Card([
-                dbc.CardHeader('Register a new beach or river'),
+                dbc.CardHeader('Register a new cleanup site'),
                 dbc.CardBody([
-                    html.P('''
-                    Please only register a new place if there isn't already a satisfactory record nearby. 
+                    dcc.Markdown('''
+                    Before registering a new place, **check for nearby satisfactory record**. 
                     We tend to record sedimentary systems as one entry as the plastic will travel along the same beach or cove.
-                    For linear beaches, try to find if there isn't already a record less than 5 km from your collection point.
+                    For linear beaches, try to find if there isn't already a record less than **2 km from your collection point**.
+                    If you notice an error please [contact us](mailto:julien.moreau@plasticatbay.org), it is a work in progress.
+                    Enter the coordinates of the new cleanup site in **decimal degree** (accuracy of 5 decimals). 
+                    **It is easy with the map**, just place the crossair where the clean happened. 
+                    Zoom in sufficiently to be able to recognise landmarks on the map.
+                    There is an *indicator* showing if you are zoomed enough for accuracy.
+                    The coordinates in the form will update as soon as you use the map.
+                    For long distance clean, place the crossair in the middle of the cove/beach you cleaned.
+                    Please be accurate when providing a place name, use official OSmaps names.
+                    If you have difficulties or a doubt, please [contact us](mailto:julien.moreau@plasticatbay.org).
                     '''),
+                    html.Hr(),
+                    html.A(id='osmap_link',
+                           children='Link to OSmap for the selected coordinates',
+                           title='Link to OSmap'
+                           target='_blank'),
+                    html.H3('Indicate the site name'),
                     dcc.Input(type='text', placeholder='Place name'),
-                    dcc.Input(id='lat', type='number', placeholder='latitude'),
-                    dcc.Input(id='lon', type='number', placeholder='longitude'),
-                    html.P('Distance to nearest beach: xxx km'),
+                    html.H3('Site coordinates (please use the map above for accuracy)'),
+                    dcc.Input(id='lat', type='number', placeholder='latitude',style={'padding':10}),
+                    dcc.Input(id='lon', type='number', placeholder='longitude',style={'padding':10}),
+                    html.H3('Zoom indicator'),
+                    
+                    daq.Indicator(
+                        label="Not enough Zoom",
+                        value=False,
+                        color='red',
+                    ),
+                    html.H3('Nearest recorded beaches'),
+                    html.P(id='nearest_records')
                     # make a warning
                                            
                     ]),
                 ]),
             
-            dbc.Row([
-                dbc.Button(
-                    'Submit new data',
-                    id='submit-button',
-                    n_clicks=0,
-                    size='lg',
-                ),
-            ]),
+            
         ])
     ])
 
@@ -440,53 +577,13 @@ def update_cum_curve(beach):
     Make a curve of the cumulative weight collected on a beach
     Calculate the rate of pollution
     '''
-    df, _,_=caching()
+    df, _,_,_,_,_=caching()
     df_beach= df[(df==beach).any(axis=1)].sort_values(by=['Dates']) \
                 .groupby(['Dates'])[['Weight']].agg('sum').reset_index()
     fig= go.Figure()
     if len(df_beach)>1:
-        ## need to account for several weights on the same day or rates will have divisions by 0
-        df_beach['Dates']=pd.to_datetime(df_beach['Dates'])
-        df_beach['Cum_weight']=df_beach['Weight'].cumsum()
-        fig.add_trace(go.Scatter(
-                x=df_beach['Dates'],
-                y=df_beach['Cum_weight'],
-                line=dict(shape='hv', color='navy'),
-                hovertemplate=
-                    "<b>%{x}</b><br>" +
-                    "Cumulative Weight: %{y:.2f}<br>",
-                name='Kg',
-                mode='lines'))
-       # df.groupby(['Beach', 'Lat', 'Longit'])[['Weight']].agg('sum').reset_index()
-        rates=  pd.Series(df_beach['Weight'].values, index=df_beach['Dates'])
-        New_Dates=df_beach['Dates'][:-1]+df_beach['Dates'].diff()[1:].values/2
-        daily_rate=rates.values[1:]/(df_beach['Dates'].diff()[1:].values.astype('float')/(1e9*3600*24))
-        fig.add_trace(go.Scatter(x= New_Dates,
-                             y=daily_rate,
-                             line=dict(color='firebrick'),
-                             yaxis='y2',
-                             name= 'kg/d',
-                             hovertemplate=
-                            "<b>%{x}</b><br>" +
-                            "Pollution rate: %{y:.2f}<br>",
-                            ),
-                 )
-        fig.update_yaxes(showgrid=False)
-        fig.update_layout(
-        title=beach,
-        showlegend=False,
-        yaxis1=dict(title='Cumulative weight (kg)',
-                    titlefont=dict(color=fig.data[0].line.color),
-                    tickfont=dict(color=fig.data[0].line.color)),
-
-        yaxis2=dict(title='pollution rate(kg/d)',
-                    anchor="x",
-                    overlaying="y",
-                    side="right",
-                    titlefont=dict(color=fig.data[1].line.color),
-                    tickfont=dict(color=fig.data[1].line.color),
-                    )
-        )
+        fig= draw_stat_curve(df_beach, fig, beach)
+        
     else:
         fig.update_layout(
             {
@@ -505,40 +602,45 @@ def update_cum_curve(beach):
     [Output('lat', 'placeholder'),
      Output('lon', 'placeholder'),
      Output('beach_picker', 'figure'),
-     Output('date_picker','disabled_days'),
-     Output('recent_records','figure')],
-    [Input('beach_picker','relayoutData'),
+     #Output('date_picker','disabled_days'),
+     Output('recent_records','figure'),
+     Output('latest-record','children'),
+     Output('selected_beach','children'),
+     Output('osmap_link','href')],
+    [Input('beach_picker','relayoutData'),    
      Input('beach-choice-map', 'value')],
-    State('beach_picker','figure'),
-    
+    State('beach_picker','figure'),   
 )
 def read_coord(stream, beach,state):
     #print(stream['mapbox._derived'])
-    last_entry_dates, fig, lon,lat=get_beach_data(beach)
-    state['layout']['mapbox']['center']=dict(
+    if ctx.triggered_id == 'beach-choice-map':
+        last_record, fig, lon,lat=get_beach_data(beach)
+        state['layout']['mapbox']['center']=dict(
                         lat=lat,
                         lon=lon,)
-    state['layout']['mapbox']['zoom']=10
-    lat, lon,beachpicker= mk_crossair(stream, state)
-                    
-    return  lat, lon,beachpicker,last_entry_dates, fig
-
-
-# switch tab with submit button
-@app.callback(
-    Output('main-tabs','active_tab'),
-    Input('submit-button', 'n_clicks'),
-)
-def Switch_tab(click):
-    if click:
-        return 'tab-submit'
+        state['layout']['mapbox']['zoom']=10
+        selection=f'You have selected: {beach}'
+        href=f'https://explore.osmaps.com/?lat={lat}&lon={lon}&zoom=14&overlays=&style=Standard&type=2d&placesCategory='
+        return lat, lon, state , fig, last_record,selection, href         
     else:
-        return 'tab-main'
+        #print('stream: ',stream)
+        lat, lon,beachpicker= mk_crossair(stream, state)
+        summary= go.Figure()
+        summary.update_layout(
+            title='no beach selected',
+            height=200,
+            margin=dict(b=1, l=1, r=1, t=30),
+        )
+        href=f'https://explore.osmaps.com/?lat={lat}&lon={lon}&zoom=14&overlays=&style=Standard&type=2d&placesCategory='      
+        return  lat, lon,beachpicker, summary, '', 'No beach selected', href 
 
-# @app.callback(
-#     Output('click-data', 'children'),
-#     Input('basic-interactions', 'clickData'))
-# def display_click_data(clickData):
-#     return json.dumps(clickData, indent=2)
+@app.callback(
+    Output('beach-choice-map', 'value'),
+    Input('beach_picker','clickData'),
+)
+def select_from_map(click):
+    return click['points'][0]['text']
+       
+
 if __name__ == '__main__':
     app.run_server(host='0.0.0.0', port=8080, debug=True)
