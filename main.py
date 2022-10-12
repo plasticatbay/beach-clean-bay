@@ -225,9 +225,14 @@ def mk_crossair(stream, fig):
     '''
     Make a crossair in the middle of the map to locate precisely.
     '''
-    center=stream['mapbox.center']
-    width=stream['mapbox._derived']['coordinates'][0][0]-stream['mapbox._derived']['coordinates'][1][0]
-    height=stream['mapbox._derived']['coordinates'][0][1]-stream['mapbox._derived']['coordinates'][2][1]
+    try:
+        center=stream['mapbox.center']
+        width=stream['mapbox._derived']['coordinates'][0][0]-stream['mapbox._derived']['coordinates'][1][0]
+        height=stream['mapbox._derived']['coordinates'][0][1]-stream['mapbox._derived']['coordinates'][2][1]
+    except:
+        center={'lon':-3,'lat':55}
+        width=1
+        height=1
     color='black'
     
     # vertical
@@ -452,7 +457,7 @@ def tab3_content():
                     html.Hr(),
                     html.A(id='osmap_link',
                            children='Link to OSmap for the selected coordinates',
-                           title='Link to OSmap'
+                           title='Link to OSmap',
                            target='_blank'),
                     html.H3('Indicate the site name'),
                     dcc.Input(type='text', placeholder='Place name'),
