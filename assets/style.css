@@ -64,3 +64,11 @@ nav-tabs{
 }
 
 
+.VirtualizedSelectFocusedOption {
+  background-color:white;
+}
+
+.VirtualizedSelectOption {
+    background-color:#003380;
+    color: #d5e5ff;
+}

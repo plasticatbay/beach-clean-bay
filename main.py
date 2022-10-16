@@ -16,7 +16,8 @@ import os
 import pandas as pd
 # import datashader as DS
 import plotly.graph_objects as go
-from colorcet import fire
+import plotly.io as pio
+# from colorcet import fire
 # from datashader import transfer_functions as tf
 from datetime import datetime, timedelta
 # import os.path
@@ -76,8 +77,21 @@ from db import init_db
 # |  3 | Keoldale                    | 58.5515 | -4.77859 | Scotland |            |
 # |  4 | Kyle of Durness (Old Grudy) | 58.5267 | -4.81157 | Scotland |            |
 
+### color management
+pio.templates['custom'] = go.layout.Template(
+    layout_paper_bgcolor='#003380',
+    layout_plot_bgcolor='#002255',
+    layout=dict(xaxis=dict(showgrid=False),
+                yaxis=dict(showgrid=False),
+                title=dict(font=dict(color='orange'))
+                ),    
+    )
+pio.templates.default = 'plotly+custom'
+
+
+### app setup
 app = dash.Dash(__name__,
-                prevent_initial_callbacks=True,
+               # prevent_initial_callbacks=True,
                 external_stylesheets=[dbc.themes.BOOTSTRAP, 'assets/style.css'],
                 meta_tags=[{"name": "viewport", "content": "width=device-width, initial-scale=1"}])
 server=app.server
@@ -131,6 +145,7 @@ def Mk_map_weight():
         #height=700,
         hovermode='closest',
         margin=dict(b=1, l=1, r=1, t=1),
+        paper_bgcolor='#003380',
         mapbox=dict(
                     bearing=0,
                     center=dict(
@@ -148,7 +163,8 @@ def draw_stat_curve(df_beach, fig, beach):
         fig.add_trace(go.Scatter(
             x=df_beach['Dates'],
             y=df_beach['Cum_weight'],
-            line=dict(shape='hv', color='navy'),
+            line=dict(shape='hv', color='white'),
+            fill='tozeroy',
             hovertemplate=
                 "<b>%{x}</b><br>" +
                 "Cumulative Weight: %{y:.2f}<br>",
@@ -169,19 +185,20 @@ def draw_stat_curve(df_beach, fig, beach):
              )
         fig.update_yaxes(showgrid=False)
         fig.update_layout(
-            title=beach,
+            title=f'Recorded plastic pollution evolution at {beach}',
             showlegend=False,
             yaxis1=dict(title='Cumulative weight (kg)',
                 titlefont=dict(color=fig.data[0].line.color),
                 tickfont=dict(color=fig.data[0].line.color)),
-
+            #paper_bgcolor='#d5e5ff',
             yaxis2=dict(title='pollution rate(kg/d)',
                 anchor="x",
                 overlaying="y",
                 side="right",
                 titlefont=dict(color=fig.data[1].line.color),
                 tickfont=dict(color=fig.data[1].line.color),
-                )
+                        ),
+            xaxis=dict(color='orange')
         )
         return fig
 
@@ -349,6 +366,8 @@ def tab2_content():
                 ),
                 dcc.Graph(
                     id='beach-statistic',
+                    figure=go.Figure(),
+                   
                 )
             ])
         ])
@@ -441,7 +460,7 @@ def tab3_content():
                 dbc.CardHeader('Register a new cleanup site'),
                 dbc.CardBody([
                     dcc.Markdown('''
-                    Before registering a new place, **check for nearby satisfactory record**. 
+                    Before registering a new place, **check for nearby satisfactory records**. 
                     We tend to record sedimentary systems as one entry as the plastic will travel along the same beach or cove.
                     For linear beaches, try to find if there isn't already a record less than **2 km from your collection point**.
                     If you notice an error please [contact us](mailto:julien.moreau@plasticatbay.org), it is a work in progress.
@@ -467,9 +486,10 @@ def tab3_content():
                     html.H3('Zoom indicator'),
                     
                     daq.Indicator(
+                        id='zoom-indicator',
                         label="Not enough Zoom",
                         value=False,
-                        color='red',
+                        #color='red',
                     ),
                     html.H3('Nearest recorded beaches'),
                     html.P(id='nearest_records')
@@ -533,6 +553,7 @@ to report to authorities and get support and recognition. Plastic@Bay report
 to national and international institutions. By feeding these databases, you help
 finding solutions to marine pollution. All our data are open access and could be
 requested at any time.
+If you enter data that don't conform or seem suspicious, or redundant, they will be deleted.
 '''
 
 default_user={'name':'Anonymous'}
@@ -575,7 +596,7 @@ app.layout = dbc.Container([
 @app.callback(
     Output('beach-statistic', 'figure'),
     Input('beach-choice', 'value'),
-    #State()
+    #State('beach-choice', 'value')
 )
 def update_cum_curve(beach):
     '''
@@ -585,21 +606,14 @@ def update_cum_curve(beach):
     df, _,_,_,_,_=caching()
     df_beach= df[(df==beach).any(axis=1)].sort_values(by=['Dates']) \
                 .groupby(['Dates'])[['Weight']].agg('sum').reset_index()
-    fig= go.Figure()
+    fig=go.Figure()
     if len(df_beach)>1:
-        fig= draw_stat_curve(df_beach, fig, beach)
-        
+        fig= draw_stat_curve(df_beach, fig, beach)        
     else:
         fig.update_layout(
-            {
-                "title": {
-                    "text": "Only one measure, cannot draw the figure",
-                },
-                "font": {
-                    "size": 28
-                }}
+            {"title": {"text": "Only one measure, cannot draw the figure",},
+             "font": {"size": 28 }}
         )
-
     return fig
 
 #check coordinates of the map
@@ -611,7 +625,9 @@ def update_cum_curve(beach):
      Output('recent_records','figure'),
      Output('latest-record','children'),
      Output('selected_beach','children'),
-     Output('osmap_link','href')],
+     Output('osmap_link','href'),
+     Output('zoom-indicator', 'value'),
+     ],
     [Input('beach_picker','relayoutData'),    
      Input('beach-choice-map', 'value')],
     State('beach_picker','figure'),   
@@ -626,7 +642,7 @@ def read_coord(stream, beach,state):
         state['layout']['mapbox']['zoom']=10
         selection=f'You have selected: {beach}'
         href=f'https://explore.osmaps.com/?lat={lat}&lon={lon}&zoom=14&overlays=&style=Standard&type=2d&placesCategory='
-        return lat, lon, state , fig, last_record,selection, href         
+        return lat, lon, state , fig, last_record,selection, href, False         
     else:
         #print('stream: ',stream)
         lat, lon,beachpicker= mk_crossair(stream, state)
@@ -636,15 +652,20 @@ def read_coord(stream, beach,state):
             height=200,
             margin=dict(b=1, l=1, r=1, t=30),
         )
-        href=f'https://explore.osmaps.com/?lat={lat}&lon={lon}&zoom=14&overlays=&style=Standard&type=2d&placesCategory='      
-        return  lat, lon,beachpicker, summary, '', 'No beach selected', href 
+        href=f'https://explore.osmaps.com/?lat={lat}&lon={lon}&zoom=14&overlays=&style=Standard&type=2d&placesCategory='
+        if state['layout']['mapbox']['zoom']>11:
+            indic=True
+        else:
+            indic=False
+        return  lat, lon,beachpicker, summary, '', 'No beach selected', href,indic 
 
 @app.callback(
     Output('beach-choice-map', 'value'),
     Input('beach_picker','clickData'),
 )
 def select_from_map(click):
-    return click['points'][0]['text']
+    if click is not None:
+        return click['points'][0]['text']
        
 
 if __name__ == '__main__':
