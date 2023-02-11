@@ -560,9 +560,10 @@ default_user={'name':'Anonymous'}
 
 
 app.title="Beach Clean Bay"
+header=dcc.Markdown('Beach Clean Bay, _Science with beach cleaners_')
 app.layout = dbc.Container([
     dbc.Card([
-        dbc.CardHeader(['Plastic@Bay CIC citizen science portal'], className='main-title'),
+        dbc.CardHeader([header], className='main-title'),
         ]),
         dbc.CardBody([
             dbc.Tabs([
@@ -582,16 +583,6 @@ app.layout = dbc.Container([
 
 
 ###################### CALLBACKS ##########################
-
-#@app.callback(
-#    Output('weight-map','figure'),
-#    Input('none', 'children')
-#)
-#def Mk_main_map():
-    # in the future distinguish by teams?
-#    _, grouped=caching()
-#    return Mk_map_weight(grouped)
-
 
 @app.callback(
     Output('beach-statistic', 'figure'),
