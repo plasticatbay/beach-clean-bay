@@ -147,20 +147,22 @@ def mk_general_curves(df):
     Gm=new_df.groupby(pd.Grouper(freq="M")).sum()
     Gy=new_df.groupby(pd.Grouper(freq="Y")).sum()
     # Gr["year"]=datetime(year=Gr.index.get_level_values(0))
-    minx,maxx=datetime(year=2017,month=1,day=1),datetime.now()
+    minx,maxx=datetime(year=2017,month=9,day=1),datetime.now()
     fig=go.Figure()    
     fig.add_trace(go.Bar(
          x=Gy.index,
          y=Gy.Weight,
          name="yearly collection",
+         marker=dict(color='#003380'),
          width=1000 * 3600 * 24 * 365,
          xperiod="M12",
-         xperiodalignment="start"
+         xperiodalignment="middle"
         ))
     fig.add_trace(go.Bar(
          x=Gm.index,
          y=Gm.Weight,
          name="monthly collection",
+         marker=dict(color='#d5e5ff'),
          width=1000 * 3600 * 24 * 28,
          xperiod="M1",
          xperiodalignment="middle"
@@ -169,7 +171,9 @@ def mk_general_curves(df):
         xaxis=dict(range=[minx,maxx], 
              color='orange',
              ticklabelmode="period"),
-        yaxis=dict(color='orange')
+        yaxis=dict(color='orange'),
+        font=dict(color='orange'),
+        legend=dict(orientation='h'),
          )
     return fig
 
