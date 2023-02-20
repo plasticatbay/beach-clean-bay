@@ -4,6 +4,7 @@ import dash_daq as daq
 import dash_bootstrap_components as dbc
 from datetime import datetime, timedelta
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 import pandas as pd
 
 ####### LAYOUTS ###############
@@ -171,7 +172,7 @@ def mk_general_curves(df):
         xaxis=dict(range=[minx,maxx], 
              color='orange',
              ticklabelmode="period"),
-        yaxis=dict(color='orange'),
+        yaxis=dict(color='orange', title='Collected weight (kg)'),
         font=dict(color='orange'),
         legend=dict(orientation='h'),
          )
@@ -189,30 +190,36 @@ def tab2_content():
                 ),
                 dcc.Graph(
                     id='beach-statistic',
-                    figure=go.Figure(),
-                   
                 )
             ])
         ])
     ])
 
 def draw_stat_curve(df_beach, fig, beach):
-        #df_beach['Dates']=pd.to_datetime(df_beach['Dates'])
+
         df_beach['Cum_weight']=df_beach['Weight'].cumsum()
-        fig.add_trace(go.Scatter(
-            x=df_beach['Dates'],
-            y=df_beach['Cum_weight'],
-            line=dict(shape='hv', color='white'),
-            fill='tozeroy',
-            hovertemplate=
-                "<b>%{x}</b><br>" +
-                "Cumulative Weight: %{y:.2f}<br>",
-            name='Kg',
-            mode='lines'))
         rates=  pd.Series(df_beach['Weight'].values, index=df_beach['Dates'])
         New_Dates=df_beach['Dates'][:-1]+df_beach['Dates'].diff()[1:].values/2
-        daily_rate=rates.values[1:]/(df_beach['Dates'].diff()[1:].values.astype('float')/(1e9*3600*24))
-        fig.add_trace(go.Scatter(x= New_Dates,
+        daily_rate=rates.values[1:]/ \
+                   (df_beach['Dates'].diff()[1:].values.astype('float')/(1e9*3600*24))
+        new_df=df_beach.set_index('Dates')
+        Gm=new_df.groupby(pd.Grouper(freq="M")).sum()
+        Gy=new_df.groupby(pd.Grouper(freq="Y")).sum()
+        fig.append_trace(
+            go.Scatter(
+                x=df_beach['Dates'],
+                y=df_beach['Cum_weight'],
+                line=dict(shape='hv', color='white'),
+                fill='tozeroy',
+                hovertemplate=
+                    "<b>%{x}</b><br>" +
+                    "Cumulative Weight: %{y:.2f}<br>",
+                name='Kg',
+                mode='lines'),
+            row=3, col=1)
+
+        fig.append_trace(
+             go.Scatter(x= New_Dates,
                          y=daily_rate,
                          line=dict(color='firebrick'),
                          yaxis='y2',
@@ -221,23 +228,61 @@ def draw_stat_curve(df_beach, fig, beach):
                         "<b>%{x}</b><br>" +
                         "Pollution rate: %{y:.2f}<br>",
                         ),
-             )
+             row=2, col=1)
+        fig.append_trace(
+             go.Bar(
+                 x=Gy.index,
+                 y=Gy.Weight,
+                 name="yearly collection",
+                 marker=dict(color='#003380'),
+                 yaxis='y3',
+                 width=1000 * 3600 * 24 * 365,
+                 xperiod="M12",
+                 xperiodalignment="middle"
+                 ),
+             row=1,col=1)
+        fig.append_trace(
+             go.Bar(
+                  x=Gm.index,
+                  y=Gm.Weight,
+                  name="monthly collection",
+                  marker=dict(color='#d5e5ff'),
+                  yaxis='y3',
+                  width=1000 * 3600 * 24 * 28,
+                  xperiod="M1",
+                  xperiodalignment="middle"
+                  ),
+             row=1,col=1)
         fig.update_yaxes(showgrid=False)
         fig.update_layout(
             title=f'Recorded plastic pollution evolution at {beach}',
-            showlegend=False,
-            yaxis1=dict(title='Cumulative weight (kg)',
+            height=800,
+            #showlegend=False,
+            yaxis1=dict(title='Collected weight (kg)',
                 titlefont=dict(color=fig.data[0].line.color),
-                tickfont=dict(color=fig.data[0].line.color)),
+                tickfont=dict(color=fig.data[0].line.color),
+                domain=[0, .32],
+                ),
             #paper_bgcolor='#d5e5ff',
             yaxis2=dict(title='pollution rate(kg/d)',
-                anchor="x",
-                overlaying="y",
+                #anchor="x1",
+                #overlaying="y",
                 side="right",
                 titlefont=dict(color=fig.data[1].line.color),
                 tickfont=dict(color=fig.data[1].line.color),
+                domain=[0.34, .65]
                         ),
-            xaxis=dict(color='orange')
+            yaxis3=dict(title='Cumulative weight (kg)',
+                side="left",
+                titlefont=dict(color=fig.data[0].line.color),
+                tickfont=dict(color=fig.data[0].line.color),
+                domain=[0.67, 1]),
+            font=dict(color='orange'),
+            legend=dict(orientation='h'),
+            xaxis3=dict(#title='Date',
+                       anchor="y1",
+                       tickfont=dict(color='orange'),
+                       color='orange')
         )
         return fig
 
