@@ -112,7 +112,7 @@ def global_store():
 
     df['Weight']=df['Weight'].astype('float')
     df.Dates=pd.to_datetime(df.Dates)
-    grouped = df.groupby(['Beach', 'Lat', 'Longit'])[['Weight']].agg('sum').reset_index()
+    grouped = df.groupby(['Beach', 'Lat', 'Longit'])['Weight'].sum().reset_index()
     return df, grouped, beaches
 
 @cache.memoize(timeout=timeout)
@@ -128,8 +128,12 @@ def get_beach_data(beach):
     last_entry_weight=df_beach['Weight'][-50:]
     if len(df_beach['Longit'])>0:
         lon,lat=df_beach['Longit'][0],df_beach['Lat'][0]
+        last_record= 'Last record in {}:   {} --- {} kg.'.format(
+            beach,last_entry_dates.iloc[-1].date(),
+            last_entry_weight.iloc[-1] )
     else:
         lon, lat=None, None
+        last_record= 'No record'
     summary=go.Figure(go.Scatter(x=last_entry_dates, y=last_entry_weight))
     summary.update_layout(
         height=200,
@@ -137,11 +141,8 @@ def get_beach_data(beach):
         margin=dict(b=1, l=1, r=5, t=30),
         yaxis=dict(title='Weight collected (kg)')
     )
-    last_record= 'Last record in {}:   {} --- {} kg.'.format(
-        beach,last_entry_dates.iloc[-1].date(),last_entry_weight.iloc[-1] )
     return last_record, summary, lon,lat
     
-
 def mk_beach_dropdown():
     '''
     Get the name of all the beaches and collect them in a dictionary
@@ -249,7 +250,7 @@ def update_cum_curve(beach):
                 .groupby(['Dates'])[['Weight']].agg('sum').reset_index()
     fig=make_subplots(rows=3, cols=1,
                     shared_xaxes=True,
-                    vertical_spacing=0.1)
+                    vertical_spacing=0.05)
     if len(df_beach)>1:
         fig= draw_stat_curve(df_beach, fig, beach)        
     else:
@@ -273,7 +274,6 @@ def generate_base_map(toast):
      Output('lat', 'placeholder'),
      Output('lon', 'placeholder'),
      Output('beach_picker', 'figure'),
-     #Output('date_picker','disabled_days'),
      Output('recent_records','figure'),
      Output('latest-record','children'),
      Output('selected_beach','children'),
