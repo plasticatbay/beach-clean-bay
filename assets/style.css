@@ -41,7 +41,7 @@ nav-tabs{
 
 .main-footer{
   text-align: right;
-  font-size:1vw;
+  # font-size:2vw;
   color:#d5e5ff;
 }
 
@@ -52,7 +52,7 @@ nav-tabs{
 }
 .card{
   border-color: #d5e5ff;
-  border-width:2px;
+  border-width:1px;
 }
 
 .card-header{
