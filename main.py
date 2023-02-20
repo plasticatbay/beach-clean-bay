@@ -126,7 +126,10 @@ def get_beach_data(beach):
                 .groupby(['Dates','Lat', 'Longit'])[['Weight']].agg('sum').reset_index()
     last_entry_dates=pd.to_datetime(df_beach['Dates'])[-50:]
     last_entry_weight=df_beach['Weight'][-50:]
-    lon,lat=df_beach['Longit'][0],df_beach['Lat'][0]
+    if len(df_beach['Longit'])>0:
+        lon,lat=df_beach['Longit'][0],df_beach['Lat'][0]
+    else:
+        lon, lat=None, None
     summary=go.Figure(go.Scatter(x=last_entry_dates, y=last_entry_weight))
     summary.update_layout(
         height=200,
@@ -244,7 +247,9 @@ def update_cum_curve(beach):
     df, _,_=caching()
     df_beach= df[(df==beach).any(axis=1)].sort_values(by=['Dates']) \
                 .groupby(['Dates'])[['Weight']].agg('sum').reset_index()
-    fig=go.Figure()
+    fig=make_subplots(rows=3, cols=1,
+                    shared_xaxes=True,
+                    vertical_spacing=0.1)
     if len(df_beach)>1:
         fig= draw_stat_curve(df_beach, fig, beach)        
     else:
