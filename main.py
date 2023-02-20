@@ -32,6 +32,7 @@ from dash.dependencies import Input, Output, State
 import dash_bootstrap_components as dbc
 from flask_caching import Cache
 
+
 from db import init_db
 from layout import *
 
