@@ -360,8 +360,7 @@ def tab3_content():
                                                  n_clicks=0,
                                                  disabled=True,
                                                  size='lg',
-                                                 style={'background-color':'#003380',
-                                                        'color':'#d5e5ff'}
+                                                 style={'color':'#d5e5ff'} #'background-color':'#003380', 
                                              ),
                                          ]),
                                          ])
