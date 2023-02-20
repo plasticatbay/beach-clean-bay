@@ -1,1 +1,1 @@
-web: gunicorn --workers 1 --threads 8 --timeout 600 main:server
+web: gunicorn --workers 2 --threads 4 --timeout 600 --worker-class = asyncio main:server 
