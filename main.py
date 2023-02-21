@@ -12,7 +12,7 @@
 #
 # Copyright 2022, Julien Moreau, Plastic@Bay CIC
 
-import os
+import os, logging
 import pandas as pd
 # import datashader as DS
 import plotly.graph_objects as go
@@ -90,6 +90,11 @@ pio.templates['custom'] = go.layout.Template(
 pio.templates.default = 'plotly+custom'
 
 
+#### SET LOGGER #####
+logging.basicConfig(format='%(levelname)s:%(asctime)s__%(message)s', datefmt='%m/%d/%Y %I:%M:%S')
+logger = logging.getLogger('beachcleanbay_logger')
+logger.setLevel(logging.DEBUG)
+
 ### app setup
 app = dash.Dash(__name__,
                # prevent_initial_callbacks=True,
@@ -100,54 +105,66 @@ cache = Cache(app.server, config={
     'CACHE_TYPE': 'filesystem',
     'CACHE_DIR': '/tmp'
 })
-timeout = 300
+timeout = 600
 
 ##################### CACHE  #########################
 
 def global_store():
-    print('Using global store')
+    '''
+    Caching the dataframe of weight (df), 
+    beach properties (beaches) 
+    and grouping cumulative weight for each beach.
+    '''
     engine = init_db()
+    logger.debug('database initialised')
     with engine.connect() as cnx:
+        logger.debug('Connected to database')
         df= pd.read_sql_table('WeightData', cnx)
         beaches=pd.read_sql_table('Beach2coord', cnx)
+        logger.debug('Dataframes built')
 
     df['Weight']=df['Weight'].astype('float')
     df.Dates=pd.to_datetime(df.Dates)
     grouped = df.groupby(['Beach', 'Lat', 'Longit'])['Weight'].sum().reset_index()
+    logger.debug('Dataframes ready to be cached')
     return df, grouped, beaches
 
 @cache.memoize(timeout=timeout)
 def caching():
+    logger.info('Using global store')
     return global_store()
 
 
 def get_beach_data(beach):
+    logger.info(f'Acquiring data from {beach}')
     df,_,_=caching()
     df_beach= df[(df==beach).any(axis=1)].sort_values(by=['Dates']) \
                 .groupby(['Dates','Lat', 'Longit'])[['Weight']].agg('sum').reset_index()
-    last_entry_dates=pd.to_datetime(df_beach['Dates'])[-50:]
-    last_entry_weight=df_beach['Weight'][-50:]
     if len(df_beach['Longit'])>0:
+        logger.debug(f'{beach} contains data')
         lon,lat=df_beach['Longit'][0],df_beach['Lat'][0]
+        last_entry_dates=pd.to_datetime(df_beach['Dates'])[-50:]
+        last_entry_weight=df_beach['Weight'][-50:]
         last_record= 'Last record in {}:   {} --- {} kg.'.format(
             beach,last_entry_dates.iloc[-1].date(),
             last_entry_weight.iloc[-1] )
+        summary=go.Figure(go.Scatter(x=last_entry_dates, y=last_entry_weight))
+        summary.update_layout(
+            height=200,
+            title=f'Last 50 records for {beach}',
+            margin=dict(b=1, l=1, r=5, t=30),
+            yaxis=dict(title='Weight collected (kg)')
+            )
+        return last_record, summary, lon,lat
     else:
-        lon, lat=None, None
-        last_record= 'No record'
-    summary=go.Figure(go.Scatter(x=last_entry_dates, y=last_entry_weight))
-    summary.update_layout(
-        height=200,
-        title=f'Last 50 records for {beach}',
-        margin=dict(b=1, l=1, r=5, t=30),
-        yaxis=dict(title='Weight collected (kg)')
-    )
-    return last_record, summary, lon,lat
+        logger.debug(f'{beach} has no data')
+        return 'No record', {}, None, None
     
 def mk_beach_dropdown():
     '''
     Get the name of all the beaches and collect them in a dictionary
     '''
+    logger.info('Gathering the beach names')
     _, grouped,_=caching()
     return grouped['Beach'].array
 
@@ -181,11 +198,12 @@ app.layout = dbc.Container([
 
 ###################### CALLBACKS ##########################
 @app.callback(
-    Output('team_selection', 'options'),#populate dropdown
+    Output('team_selection', 'options'),
     Input('toast', 'is_open'),
     )
 def initialise_dropdown(toast):
     if toast:
+        logger.info('Populating teams dropdown')
         df,_,_= caching()
         return df.Teams.explode().unique()
 
@@ -194,6 +212,7 @@ def initialise_dropdown(toast):
     Input('switch_all_years','on'),
     )
 def activate_year(switch):
+    logger.debug('Year slider changed')
     return switch
    
 @app.callback(
@@ -201,6 +220,7 @@ def activate_year(switch):
     Input('switch_all_teams','on'),
     )
 def activate_team(switch):
+    logger.debug('Team slider changed')
     return switch
    
 @app.callback(
@@ -215,10 +235,13 @@ def activate_team(switch):
     Input('switch_all_teams','on'),# all teams
 )
 def Mk_main_map(year, sw_year, team,sw_team):
+   logger.info('building the map')
    df,_,_= caching()
    if not sw_year:
+       logger.debug(f'Building only for year {year}')
        df= df[df.Dates.dt.year== year]   
    if not sw_team:
+       logger.debug(f'Building only for team {team}')
        df= df[df.Teams.apply(lambda x: team in x)]       
    grouped = df.groupby(['Beach', 'Lat', 'Longit'])[['Weight']].agg('sum').reset_index()
    
@@ -233,6 +256,7 @@ def Mk_main_map(year, sw_year, team,sw_team):
     Input('toast', 'is_open'),
     )
 def populate_beach(toast):
+    logger.info('Populate the beach dropdowns')
     _, grouped,_=caching()
     return grouped['Beach'].array, grouped['Beach'].array
 
@@ -246,6 +270,7 @@ def update_cum_curve(beach):
     Make a curve of the cumulative weight collected on a beach
     Calculate the rate of pollution
     '''
+    logger.info('Making the beach statistics')
     df, _,_=caching()
     df_beach= df[(df==beach).any(axis=1)].sort_values(by=['Dates']) \
                 .groupby(['Dates'])[['Weight']].agg('sum').reset_index()
@@ -266,6 +291,7 @@ def update_cum_curve(beach):
     Input('toast', 'is_open')
     )
 def generate_base_map(toast):
+    logger.info('Making the map for tab3')
     _, grouped,_=caching()
     return Mk_base_map(grouped)
 
@@ -286,6 +312,7 @@ def generate_base_map(toast):
 )
 def read_coord(stream, beach,state):
     #print(stream['mapbox._derived'])
+    logger.info('Interactivity in input tab')
     if ctx.triggered_id == 'beach-choice-map':
         last_record, fig, lon,lat=get_beach_data(beach)
         state['layout']['mapbox']['center']=dict(
@@ -317,6 +344,7 @@ def read_coord(stream, beach,state):
 )
 def select_from_map(click):
     if click is not None:
+        logger.info('Get selected beach data')
         return click['points'][0]['text']
        
 
