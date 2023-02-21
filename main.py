@@ -32,7 +32,6 @@ from dash.dependencies import Input, Output, State
 import dash_bootstrap_components as dbc
 from flask_caching import Cache
 
-
 from db import init_db
 from layout import *
 
@@ -93,7 +92,7 @@ pio.templates.default = 'plotly+custom'
 #### SET LOGGER #####
 logging.basicConfig(format='%(levelname)s:%(asctime)s__%(message)s', datefmt='%m/%d/%Y %I:%M:%S')
 logger = logging.getLogger('beachcleanbay_logger')
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.INFO)
 
 ### app setup
 app = dash.Dash(__name__,
@@ -233,8 +232,9 @@ def activate_team(switch):
     Input('switch_all_years', 'on'),# all years
     Input('team_selection', 'value'),#dropdown teams
     Input('switch_all_teams','on'),# all teams
+    Input('radio', 'value'),
 )
-def Mk_main_map(year, sw_year, team,sw_team):
+def Mk_main_map(year, sw_year, team,sw_team, radio):
    logger.info('building the map')
    df,_,_= caching()
    if not sw_year:
@@ -242,10 +242,30 @@ def Mk_main_map(year, sw_year, team,sw_team):
        df= df[df.Dates.dt.year== year]   
    if not sw_team:
        logger.debug(f'Building only for team {team}')
-       df= df[df.Teams.apply(lambda x: team in x)]       
-   grouped = df.groupby(['Beach', 'Lat', 'Longit'])[['Weight']].agg('sum').reset_index()
-   
-   return [Mk_map_weight(grouped), 
+       df= df[df.Teams.apply(lambda x: team in x)]     
+   if radio == 'W' : 
+       grouped = df.groupby(['Beach', 'Lat', 'Longit'])['Weight'].sum().reset_index()
+       txt="<b>%{text}</b><br><br>Weight: %{marker.size:.2f}<br>"
+       sizeref=10
+       col='Weight'
+   elif radio == 'Nb':
+       grouped = df.groupby(['Beach', 'Lat', 'Longit'])['Weight'].count().reset_index()
+       txt="<b>%{text}</b><br><br>Count: %{marker.size}<br>"
+       sizeref=0.5
+       col='Weight'      
+   else:
+       mins=df.groupby(['Beach', 'Lat', 'Longit'])['Dates'].min().reset_index()
+       maxs=df.groupby(['Beach', 'Lat', 'Longit'])['Dates'].max().reset_index()
+       weight=df.groupby(['Beach', 'Lat', 'Longit'])['Weight'].sum().reset_index()
+       weight['dur']=maxs.Dates-mins.Dates
+       grouped=weight[weight.dur>pd.Timedelta('7 day')]
+       grouped['Rates']= grouped.loc[:,'Weight'].values/ \
+                               (grouped.loc[:,'dur'].values/pd.Timedelta('1 day'))
+       txt="<b>%{text}</b><br><br>Rates kg/day: %{marker.size:.2f}<br>"
+       sizeref=0.04
+       col='Rates'
+  
+   return [Mk_map_weight(grouped, txt, sizeref, col), 
           round(df['Weight'].sum()), 
           len(grouped), len(df), 
           mk_general_curves(df)]

@@ -11,5 +11,3 @@ psycopg2-binary==2.9.3
 sqlalchemy==2.0.4
 werkzeug>=2.1.0
 orjson==3.8.5
-# asyncio==3.4.3
-# gevent

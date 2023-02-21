@@ -7,6 +7,16 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import pandas as pd
 import logging
+from colorcet import *
+import numpy as np
+
+def mk_colorscale(cmp):
+    '''
+    format the colorscale for update in the callback
+    '''
+    idx =np.linspace(0,1,len(cmp))
+    return np.vstack((idx, np.array(cmp))).T.tolist()
+
 
 ####### LAYOUTS ###############
 
@@ -41,6 +51,16 @@ def toast_content():
                          id='team_selection',
                          placeholder='Select a team',
                          disabled=True),
+                     html.H3('Select the statistic to display'),
+                     dcc.RadioItems(
+                         options=[
+                             {'label':' Weight (kg) ', 'value':'W'}, 
+                             {'label':' Number of cleans ', 'value':'Nb'},
+                             {'label':' Pollution rate (kg/day)', 'value':'R'}],
+                         value='W',
+                         id='radio',
+                         inline=True,
+                         style={'padding':'5px'}),
                      ]),
                  ])
              ])
@@ -112,7 +132,7 @@ def tab1_content(intro):
     ])
     return tab1_layout
 
-def Mk_map_weight(grouped):
+def Mk_map_weight(grouped, txt, sizeref,col):
     '''
     Make a map of plastic accumulations
     '''
@@ -121,14 +141,13 @@ def Mk_map_weight(grouped):
                      lon=grouped['Longit'],
                      lat=grouped['Lat'],
                      text=grouped['Beach'],
-                     hovertemplate=
-                    "<b>%{text}</b><br><br>" +
-                    "Weight: %{marker.size:.2f}<br>",
+                     hovertemplate=txt,
                      marker=dict(
-                            size=grouped['Weight'].values.astype('float'),
-                            color='orange',
+                            size=grouped[col].values.astype('float'),
+                            color=grouped[col].values.astype('float'),
+                            colorscale=bmy, #'orange',
                             sizemode='area',
-                            sizeref=10)))
+                            sizeref=sizeref)))
 
     plastic_map.update_layout(
         #height=700,
@@ -143,7 +162,7 @@ def Mk_map_weight(grouped):
                     ),
                     pitch=0,
                     zoom=4,
-                    style="stamen-toner",))
+                    style="open-street-map",)) #stamen-toner"
     return plastic_map
 
 def mk_general_curves(df):
@@ -546,4 +565,4 @@ If you enter data that don't conform or seem suspicious, or redundant, they will
 
 logging.basicConfig(format='%(levelname)s:%(asctime)s__%(message)s', datefmt='%m/%d/%Y %I:%M:%S')
 logger = logging.getLogger('sealice_logger')
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.INFO)
