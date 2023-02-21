@@ -8,8 +8,8 @@ colorcet==3.0.0
 flask_caching==2.0.1
 pandas==1.4.4
 psycopg2-binary==2.9.3
-sqlalchemy==1.4.41
+sqlalchemy==2.0.4
 werkzeug>=2.1.0
 orjson==3.8.5
-#asyncio==3.4.3
-#gevent
+# asyncio==3.4.3
+# gevent
