@@ -1,7 +1,8 @@
-import os
+import os, logging
 from sqlalchemy import Column, create_engine, Date, Float, Integer, Sequence, String
+from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import declarative_base
-from sqlalchemy.ext.asyncio import create_async_engine
+# from sqlalchemy.ext.asyncio import create_async_engine
 
 Base = declarative_base()
 
@@ -16,6 +17,7 @@ class WeightData(Base):
     Dates = Column(Date)
     team = Column(String)
     person = Column(String)
+    Teams = Column(ARRAY(String))
 
     def __repr__(self):
         return f"<WeightData(Dates={self.Dates}, Beach={self.Beach}, Weight={self.Weight}>"
@@ -45,6 +47,7 @@ class Beach(Base):
 
 def init_db(drop=False):
     db_url = os.getenv('DATABASE_URL')
+    logger.debug(f'URL: {db_url}')
     if not db_url:
         raise Exception("Environment variable DATABASE_URL must be set")
 
@@ -52,8 +55,13 @@ def init_db(drop=False):
     db_url = db_url.replace('postgres://', 'postgresql://')
 
     engine = create_engine(db_url)
+    logger.info('Engine created')
     if (drop):
+        logger.info('Base dropped')
         Base.metadata.drop_all(engine)
         Base.metadata.create_all(engine)
     return engine
 
+logging.basicConfig(format='%(levelname)s:%(asctime)s__%(message)s', datefmt='%m/%d/%Y %I:%M:%S')
+logger = logging.getLogger('sealice_logger')
+logger.setLevel(logging.DEBUG)

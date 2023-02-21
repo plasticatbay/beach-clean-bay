@@ -6,10 +6,12 @@ from datetime import datetime, timedelta
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import pandas as pd
+import logging
 
 ####### LAYOUTS ###############
 
 def toast_content():
+    logger.info('make the tuning card')
     minyear, maxyear= 2017,2023
     marks={y:{'label': str(y)} for y in range(minyear, maxyear+1)}
     child= dbc.Card([
@@ -46,7 +48,7 @@ def toast_content():
     return child
 
 def tab1_content(intro):
-
+    logger.info('Build the main tab')
     tab1_layout=dbc.Card([        
         dbc.CardBody([
             dbc.Row([
@@ -114,6 +116,7 @@ def Mk_map_weight(grouped):
     '''
     Make a map of plastic accumulations
     '''
+    logger.info('Build the portal map')
     plastic_map=go.Figure(go.Scattermapbox(
                      lon=grouped['Longit'],
                      lat=grouped['Lat'],
@@ -144,6 +147,7 @@ def Mk_map_weight(grouped):
     return plastic_map
 
 def mk_general_curves(df):
+    logger.info('Build the portal curves')
     new_df=df.set_index('Dates')
     Gm=new_df.groupby(pd.Grouper(freq="M")).sum()
     Gy=new_df.groupby(pd.Grouper(freq="Y")).sum()
@@ -179,6 +183,7 @@ def mk_general_curves(df):
     return fig
 
 def tab2_content():
+    logger.info('Build beach statistic tab')
     return dbc.Card([
         dbc.CardHeader('Individual beach statistics'),
         dbc.CardBody([
@@ -196,7 +201,7 @@ def tab2_content():
     ])
 
 def draw_stat_curve(df_beach, fig, beach):
-
+        logger.info('draw stat curves')
         df_beach['Cum_weight']=df_beach['Weight'].cumsum()
         rates=  pd.Series(df_beach['Weight'].values, index=df_beach['Dates'])
         New_Dates=df_beach['Dates'][:-1]+df_beach['Dates'].diff()[1:].values/2
@@ -288,6 +293,7 @@ def draw_stat_curve(df_beach, fig, beach):
 
 
 def tab3_content():
+    logger.info('Build input tab content')
     return dbc.Card([
         dbc.CardHeader('Submission form'),
         dbc.CardBody([
@@ -416,6 +422,7 @@ def tab3_content():
     ])
 
 def Mk_base_map(grouped):
+    logger.info('Draw basemap')
     base_map=go.Figure()
     base_map.add_trace(
         go.Scattermapbox(
@@ -453,6 +460,7 @@ def mk_crossair(stream, fig):
     '''
     Make a crossair in the middle of the map to locate precisely.
     '''
+    logger.info('Make crossair')
     try:
         center=stream['mapbox.center']
         width=stream['mapbox._derived']['coordinates'][0][0]-stream['mapbox._derived']['coordinates'][1][0]
@@ -481,6 +489,7 @@ def mk_crossair(stream, fig):
     return center['lat'],center['lon'],fig
 
 def tab4_content(user_obj):
+    logger.info('Build user tab content')
     return dbc.Card([
         dbc.CardHeader('Welcome '+user_obj['name']),
         dbc.CardBody([
@@ -501,6 +510,7 @@ def tab4_content(user_obj):
     ])
 
 def footer_content():
+    logger.info('Build footer')
     return dbc.Row([
                 dbc.Col([html.P('contact us')], width=2),
                 dbc.Col([
@@ -533,3 +543,7 @@ finding solutions to marine pollution. All our data are open access and could be
 requested at any time.
 If you enter data that don't conform or seem suspicious, or redundant, they will be deleted.
 '''
+
+logging.basicConfig(format='%(levelname)s:%(asctime)s__%(message)s', datefmt='%m/%d/%Y %I:%M:%S')
+logger = logging.getLogger('sealice_logger')
+logger.setLevel(logging.DEBUG)
