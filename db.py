@@ -47,7 +47,7 @@ class Beach(Base):
 
 def init_db(drop=False):
     db_url = os.getenv('DATABASE_URL')
-    logger.debug(f'URL: {db_url}')
+    # logger.debug(f'URL: {db_url}')
     if not db_url:
         raise Exception("Environment variable DATABASE_URL must be set")
 
@@ -64,4 +64,4 @@ def init_db(drop=False):
 
 logging.basicConfig(format='%(levelname)s:%(asctime)s__%(message)s', datefmt='%m/%d/%Y %I:%M:%S')
 logger = logging.getLogger('sealice_logger')
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.INFO)
