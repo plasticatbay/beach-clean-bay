@@ -1,4 +1,4 @@
-dash==2.8.1
+dash>=2.15.0
 dash_bootstrap_components==1.2.1
 dash_daq==0.5.0
 gunicorn[extra]==20.1.0
