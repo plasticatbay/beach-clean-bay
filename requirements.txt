@@ -1,7 +1,7 @@
 dash>=2.15.0
 dash_bootstrap_components==1.2.1
 dash_daq==0.5.0
-gunicorn[extra]==20.1.0
+gunicorn[extra]==22.0
 numpy==1.23.4
 plotly==5.13.0
 colorcet==3.0.0
